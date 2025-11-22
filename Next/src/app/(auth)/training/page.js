@@ -3,11 +3,13 @@ import { validateSession } from "@/lib/action";
 import { redirect } from "next/navigation";
 
 export default async function TrainingPage() {
-  const trainingSessions = getTrainings();
+  console.log("Loading Training Page...");
   const session = await validateSession();
+  console.log("Training page session:", session);
   if (!session) {
     redirect("/?mode=login");
   }
+  const trainingSessions = await getTrainings();
   return (
     <>
       <main>

@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Get, Headers } from '@nestjs/common';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UserService } from './user.service';
 import { AuthService } from './auth.service';
@@ -23,5 +23,10 @@ export class UserController {
   @Post('signin')
   signIn(@Body() createUserDto: CreateUserDto) {
     return this.authService.signIn(createUserDto);
+  }
+
+  @Get('refresh-token')
+  rotateToken(@Headers('authorization') refreshToken: string) {
+    return this.authService.rotateToken(refreshToken);
   }
 }

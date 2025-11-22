@@ -1,7 +1,5 @@
 import jwt, { SignOptions, JwtPayload, TokenExpiredError } from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
-
 export interface JwtValidateResult {
   valid: boolean;
   expired?: boolean;
@@ -16,9 +14,13 @@ export interface JwtValidateResult {
 export function signJwt(
   payload: Record<string, unknown>,
   options?: SignOptions,
+  isRefresh = false,
 ): string {
   try {
-    return jwt.sign(payload as object, JWT_SECRET, options);
+    const secret = isRefresh
+      ? process.env.JWT_REFRESH_SECRET || 'default_refresh_secret_key'
+      : process.env.JWT_SECRET || 'default_secret_key';
+    return jwt.sign(payload as object, secret, options);
   } catch (err) {
     // Optionally log the error
     throw new Error(`Failed to sign JWT: ${(err as Error).message}`);
@@ -28,9 +30,15 @@ export function signJwt(
 /**
  * Validate and verify a JWT. Returns an object describing the result.
  */
-export function validateJwt(token: string): JwtValidateResult {
+export function validateJwt(
+  token: string,
+  isRefresh = false,
+): JwtValidateResult {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const secret = isRefresh
+      ? process.env.JWT_REFRESH_SECRET || 'default_refresh_secret_key'
+      : process.env.JWT_SECRET || 'default_secret_key';
+    const decoded = jwt.verify(token, secret);
     return { valid: true, expired: false, decoded };
   } catch (err: unknown) {
     // jsonwebtoken exposes TokenExpiredError for expired tokens

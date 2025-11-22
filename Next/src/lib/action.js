@@ -1,33 +1,40 @@
 "use server";
 
-import { verifyPassword } from "./hash";
-import {
-  createSession,
-  decryptSessionData,
-  encryptSessionData,
-  deleteSession,
-} from "./session";
-import { createUser, getUserByEmail } from "./user";
-import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getSessionById } from "./session";
+import { validateJwt } from "./validate";
+import { redirect } from "next/navigation";
 
 export async function signup(prevState, formData) {
   //validation logic can be added here
   const email = formData.get("email");
   const password = formData.get("password");
   try {
-    const existingUser = await getUserByEmail(email);
-    if (existingUser) {
-      return { type: "error", message: "User exists already!" };
-    }
-    await createUser(email, password);
-    const user = await getUserByEmail(email);
-    if (!user) {
-      return { type: "error", message: "User can't be found after creation." };
-    }
-    await createSession(user.id);
-    // redirect to training page after successful signup
+    const response = await fetch(`${process.env.API_URL}/user/signup`, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const { token, refreshToken } = await response.json();
+
+    const cookieStore = await cookies();
+
+    cookieStore.set("access-token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: new Date(Date.now() + 1 * 60 * 60 * 1000),
+    });
+
+    cookieStore.set("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
     redirect("/training");
     return { type: "success", message: "You successfully signed up!" };
   } catch (err) {
@@ -43,18 +50,32 @@ export async function login(prevState, formData) {
   const email = formData.get("email");
   const password = formData.get("password");
   try {
-    const user = await getUserByEmail(email);
-    if (!user) {
-      console.log("No user found with email:", email);
-      return { type: "error", message: "Invalid email or password." };
-    }
-    const isValidPassword = await verifyPassword(user.password, password);
-    if (!isValidPassword) {
-      console.log("Password mismatch for user:", email);
-      return { type: "error", message: "Invalid email or password." };
-    }
-    await createSession(user.id);
-    // redirect to training page after successful login
+    const response = await fetch(`${process.env.API_URL}/user/signin`, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const { token, refreshToken } = await response.json();
+
+    const cookieStore = await cookies();
+
+    cookieStore.set("access-token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: new Date(Date.now() + 1 * 60 * 60 * 1000),
+    });
+
+    cookieStore.set("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
     redirect("/training");
     return { type: "success", message: "You successfully logged in!" };
   } catch (err) {
@@ -68,26 +89,16 @@ export async function login(prevState, formData) {
 
 export async function validateSession() {
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("session");
+  const sessionCookie = cookieStore.get("access-token");
   if (!sessionCookie) {
     return null;
   }
+
   try {
-    const sessionData = await decryptSessionData(sessionCookie.value);
-    if (!sessionData) {
-      return null;
-    }
-    const { sessionId, expiresAt } = sessionData;
-    if (Date.now() > expiresAt) {
-      return null;
-    }
-
-    const session = await getSessionById(sessionId);
-    if (!session) {
-      return null;
-    }
-
-    return session;
+    const token = sessionCookie.value;
+    const { valid } = validateJwt(token);
+    if (valid) return token;
+    return null;
   } catch (err) {
     return null;
   }
@@ -96,24 +107,37 @@ export async function validateSession() {
 export async function refreshSession() {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session");
+    const sessionCookie = cookieStore.get("refresh-token");
     if (!sessionCookie) {
       return null;
     }
-    const session = await decryptSessionData(sessionCookie.value);
-    const { sessionId } = session;
-    const newExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
-    const encryptedSessionData = await encryptSessionData({
-      sessionId,
-      expiresAt: newExpiresAt,
+    const refreshToken = sessionCookie.value;
+    const response = await fetch(`${process.env.API_URL}/user/refresh-token`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${refreshToken}`,
+      },
     });
-    cookieStore.set("session", encryptedSessionData, {
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const { token, refreshToken: newRefreshToken } = await response.json();
+
+    cookieStore.set("access-token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      expires: new Date(newExpiresAt),
+      expires: new Date(Date.now() + 1 * 60 * 60 * 1000),
     });
-    return session;
+    cookieStore.set("refresh-token", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+    return token;
   } catch (err) {
     console.log("Error in refreshing session:", err);
     return null;
@@ -122,14 +146,18 @@ export async function refreshSession() {
 
 export async function clearSessionCookie() {
   const cookieStore = await cookies();
-  cookieStore.delete("session", { path: "/" });
+  cookieStore.delete("access-token", { path: "/" });
+  cookieStore.delete("refresh-token", { path: "/" });
 }
 
 export async function logout() {
   try {
-    await deleteSession();
+    await clearSessionCookie();
     redirect("/?mode=login");
+    return { type: "success", message: "You have been logged out." };
   } catch (err) {
+    if (err && (err.digest || "").toString().includes("NEXT_REDIRECT"))
+      throw err;
     console.log("Error in logging out:", err);
     return {
       type: "error",
