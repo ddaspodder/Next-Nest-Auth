@@ -1,0 +1,18 @@
+{
+  // Use the TypeScript installed in this project
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  // Ensure the ESLint extension runs in this project folder (so parserOptions.project resolves)
+  "eslint.workingDirectories": [{ "directory": ".", "changeProcessCWD": true }],
+
+  // Help ESLint extension locate local plugins
+  "eslint.nodePath": "node_modules",
+  // Use the system Windows PowerShell as the integrated terminal and pass a safe execution policy
+  "terminal.integrated.defaultProfile.windows": "Windows PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "Windows PowerShell": {
+      "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "args": ["-ExecutionPolicy", "Bypass"]
+    }
+  }
+}
