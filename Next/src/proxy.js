@@ -9,19 +9,22 @@ const privateRoutes = ["/training"];
 
 export async function proxy(req) {
   const { pathname } = req.nextUrl;
-  const isPrivate = privateRoutes.some((route) => pathname.startsWith(route));
+  const isPrivate = privateRoutes.some((route) =>
+    new RegExp(`^${route}(/.*)?$`).test(pathname)
+  );
   if (isPrivate) {
-    console.log("Validating session for route:", pathname);
-    let token = await validateSession();
-    if (!token) {
-      console.log("Access token invalid or missing, attempting to refresh...");
-      token = await refreshSession();
-      console.log("Session refreshed successfully:", token);
-      //Session Refresh was completed but still the training page session is null for this request, it gets set only in the next request why ?
+    const session = await validateSession();
+    //todo this only if expired not on invalid
+    if (!session) {
+      await clearSessionCookie();
+    }
+    if (session && session.expired) {
+      const token = await refreshSession();
       if (!token) {
-        console.log("Refresh failed, clearing session cookies.");
         await clearSessionCookie();
       }
+      //Session Refresh was completed, but cookies will be set after the request is complete, so if we let the request continue, it will still not have the cookies set, so we redirect to the same path to ensure cookies are set first
+      return NextResponse.redirect(req.url);
     }
   }
 

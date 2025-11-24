@@ -15,6 +15,7 @@ export class AuthService {
   constructor(private readonly userService: UserService) {}
 
   async signUp(userData: CreateUserDto) {
+    //todo user already exists check
     try {
       const hashedPassword = await hashPassword(userData.password);
       const user = await this.userService.createUser({
@@ -47,7 +48,7 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new BadRequestException('Invalid email or password');
     }
-    const token = signJwt({ userId: user.id }, { expiresIn: '1h' });
+    const token = signJwt({ userId: user.id }, { expiresIn: '5s' });
     const refreshToken = signJwt(
       { userId: user.id },
       { expiresIn: '7d' },

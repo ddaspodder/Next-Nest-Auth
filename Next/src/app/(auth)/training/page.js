@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 export default async function TrainingPage() {
   console.log("Loading Training Page...");
   const session = await validateSession();
-  console.log("Training page session:", session);
-  if (!session) {
+  if (!session || session.expired) {
     redirect("/?mode=login");
   }
   const trainingSessions = await getTrainings();

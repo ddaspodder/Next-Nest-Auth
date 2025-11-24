@@ -96,8 +96,8 @@ export async function validateSession() {
 
   try {
     const token = sessionCookie.value;
-    const { valid } = validateJwt(token);
-    if (valid) return token;
+    const { valid, expired } = validateJwt(token);
+    if (valid || expired) return { token, expired };
     return null;
   } catch (err) {
     return null;
